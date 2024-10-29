@@ -1,0 +1,22 @@
+[project]
+name = "resume"
+version = "0.1.0"
+description = "Default template for PDM package"
+authors = [
+    {name = "HanRix1", email = "HanRix1@mail.ru"},
+]
+dependencies = [
+    "fastapi[standard]>=0.115.4",
+    "Requests>=2.32.3",
+]
+requires-python = ">=3.12"
+readme = "README.md"
+license = {text = "MIT"}
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+
+[tool.pdm]
+distribution = true
