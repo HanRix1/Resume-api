@@ -18,9 +18,7 @@ class DatabaseSettings(BaseSettings):
 
     @property
     def url(self) -> str:
-        return(
-            f"{self.driver}://{self.username}:{self.password}@{self.host}/{self.name}"
-        )
+        return f"{self.driver}://{self.username}:{self.password}@{self.host}/{self.name}"
     
     @property
     def async_url(self) -> str:
