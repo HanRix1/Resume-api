@@ -13,6 +13,8 @@ dependencies = [
     "alembic>=1.14.0",
     "asyncpg>=0.30.0",
     "psycopg2>=2.9.10",
+    "python-multipart>=0.0.17",
+    "boto3[crt]>=1.35.56",
 ]
 requires-python = ">=3.12"
 readme = "README.md"
