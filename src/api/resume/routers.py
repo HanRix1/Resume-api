@@ -1,16 +1,14 @@
 import os
-import uuid
 import boto3
-from botocore.exceptions import NoCredentialsError, PartialCredentialsError
+from botocore.exceptions import NoCredentialsError
+from sqlalchemy import insert, select
+from typing import Annotated, List
 
-from typing import Annotated
-from pydantic import BaseModel
-from sqlalchemy import insert
 from db.base import async_session
 from db.models import Resume
+from .schemas import Files
 
-from fastapi import (APIRouter, HTTPException, Path, Query, Response, UploadFile, status)
-from fastapi.responses import StreamingResponse
+from fastapi import (APIRouter, File, HTTPException, Path, Query, Response, UploadFile, status)
 
 router = APIRouter(
     prefix="/resume",
@@ -36,10 +34,11 @@ except s3_client.exceptions.BucketAlreadyOwnedByYou:
 except s3_client.exceptions.BucketAlreadyExists:
     pass
 
-
+#  -> HTTPException | Response
+#  -> HTTPException | List[Files]
 
 @router.post("/upload/")
-async def upload_file(file: UploadFile, username: Annotated[str, Query()]):
+async def upload_resume(file: UploadFile, username: Annotated[str, Query(max_length=32)]) -> Response:
     try:
         s3_client.upload_fileobj(file.file, BUCKET_NAME, file.filename)
         async with async_session() as session:
@@ -56,12 +55,42 @@ async def upload_file(file: UploadFile, username: Annotated[str, Query()]):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-
-@router.get("/download/{filename}")
-async def download_file(filename: Annotated[str, Path()]):
+@router.delete("/delete/{filename}")
+async def delete_resume(filename: Annotated[str, Path(max_length=128)]) -> Response:
     try:
-        file_obj = s3_client.get_object(Bucket=BUCKET_NAME, Key=filename)
-        return StreamingResponse(file_obj['Body'], media_type="application/octet-stream")
+        file_obj = s3_client.delete_object(Bucket=BUCKET_NAME, Key=filename)
+        async with async_session() as session:
+            query = select(Resume).filter_by(file_name=filename)
+            result = await session.execute(query)
+            resume_to_delete = result.scalar_one_or_none()
+            await session.delete(resume_to_delete)
+            await session.commit()
+        return Response(status_code=status.HTTP_201_CREATED)
+    
+    except s3_client.exceptions.NoSuchKey:
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+
+@router.get("/list/")
+async def resume_list() -> list[Files]:
+    try:
+        async with async_session() as session:
+            query = select(Resume)
+            result = await session.execute(query)
+            resumes = result.scalars().all()
+        result: list[Files] = []
+        for resume in resumes:
+            presigned_url = s3_client.generate_presigned_url(
+                'get_object',
+                Params={'Bucket': BUCKET_NAME, 'Key': resume.file_name},
+                ExpiresIn=3600  # Время жизни URL в секундах
+            )
+            result.append(Files(name=resume.name, filepath=presigned_url))
+        return result
+    
     except s3_client.exceptions.NoSuchKey:
         raise HTTPException(status_code=404, detail="File not found")
     except Exception as e:
